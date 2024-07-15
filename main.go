@@ -12,11 +12,11 @@ var Cache sync.Map
 
 func main() {
 	fmt.Println("Launching...🚀")
-	fmt.Println("Landed...🔥")
 	listener, err := net.Listen("tcp", "localhost:8069")
 	if err != nil {
 		log.Fatal(err)
 	}
+	fmt.Println("Listening at 8069🔥")
 	defer listener.Close()
 	for {
 		// Accept incoming connections
