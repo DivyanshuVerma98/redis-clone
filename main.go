@@ -16,7 +16,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Println("Listening at 8069🔥")
+	fmt.Println("Listening at 8069🔥🔥")
 	defer listener.Close()
 	for {
 		// Accept incoming connections
