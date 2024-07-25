@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"strings"
 	"sync"
 )
 
@@ -12,40 +13,38 @@ var Cache sync.Map
 
 func main() {
 	fmt.Println("Launching...🚀")
+	redis := CreateRedis()
 	listener, err := net.Listen("tcp", "localhost:8069")
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Println("Listening at 8069🔥🔥")
+	fmt.Println("Listening at 8069🔥🔥..")
 	defer listener.Close()
 	for {
 		// Accept incoming connections
 		conn, err := listener.Accept()
-		log.Println("New connection", conn)
 		if err != nil {
 			log.Fatal(err)
 		}
 		// Handle client connection in a goroutine
-		client := newClient(conn)
-		go handleClient(client)
+		client := NewClient(conn)
+		redis.AddClient(client)
+		go handleClient(client, redis)
 	}
 }
 
-func handleClient(client *client) {
+func handleClient(client *Client, redis *Redis) {
 	defer func() {
 		if err := recover(); err != nil {
 			log.Println("Recovering from error", err)
 			client.conn.Close()
+			redis.RemoveClient(client)
 		}
 	}()
-
-	for {
-		r := bufio.NewReader(client.conn)
-		line, err := r.ReadBytes('\n')
-		if err != nil {
-			fmt.Println("Error", err)
-			return
-		}
-		client.handle(line)
+	scanner := bufio.NewScanner(client.conn)
+	for scanner.Scan() {
+		input := scanner.Text()
+		parts := strings.Split(input, " ")
+		redis.HandleCommand(parts[0], parts[1:], client)
 	}
 }
