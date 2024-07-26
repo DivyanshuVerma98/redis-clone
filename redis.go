@@ -13,12 +13,15 @@ type Redis struct {
 	// To store data into cache
 	// Using sync.Map to avoid race conditions
 	CacheMap sync.Map
+	// To support sub/pub on a channel
+	ChannelMap map[string]map[*Client]bool
 }
 
 func CreateRedis() *Redis {
 	return &Redis{
-		ClientMap: map[string]*Client{},
-		CacheMap:  sync.Map{},
+		ClientMap:  map[string]*Client{},
+		CacheMap:   sync.Map{},
+		ChannelMap: map[string]map[*Client]bool{},
 	}
 }
 
@@ -69,6 +72,36 @@ func (r *Redis) Delete(key string) (string, error) {
 	return "OK", nil
 }
 
+func (r *Redis) Subscribe(channelName string, client *Client) (string, error) {
+	_, exists := r.ChannelMap[channelName]
+	if !exists {
+		r.ChannelMap[channelName] = map[*Client]bool{client: true}
+	} else {
+		r.ChannelMap[channelName][client] = true
+	}
+	return "Ok", nil
+}
+
+func (r *Redis) Publish(channelName, msg string, client *Client) (string, error) {
+	subMap, exists := r.ChannelMap[channelName]
+	if !exists {
+		return "", fmt.Errorf("channel doesn't exists")
+	}
+	var wg sync.WaitGroup
+	for sub := range subMap {
+		if sub == client {
+			continue
+		}
+		wg.Add(1)
+		go func(client *Client) {
+			client.SendResponse(client.conn.LocalAddr().String() + "\n" + msg)
+			defer wg.Done()
+		}(sub)
+	}
+	wg.Wait()
+	return "Ok", nil
+}
+
 // Handling Supported Commands - GET, SET etc..
 func (r *Redis) HandleCommand(cmd string, args []string, client *Client) {
 	var err error
@@ -102,6 +135,20 @@ func (r *Redis) HandleCommand(cmd string, args []string, client *Client) {
 			res = "Invalid number of arguments"
 		} else {
 			res, err = r.Delete(args[0])
+		}
+
+	case "SUB":
+		if len(args) != 1 {
+			res = "Invalid number of arguments"
+		} else {
+			res, err = r.Subscribe(args[0], client)
+		}
+
+	case "PUB":
+		if len(args) < 2 {
+			res = "Invalid number of arguments"
+		} else {
+			res, err = r.Publish(args[0], strings.Join(args[1:], " "), client)
 		}
 
 	case "QUIT":
