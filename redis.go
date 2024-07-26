@@ -72,6 +72,7 @@ func (r *Redis) Delete(key string) (string, error) {
 	return "OK", nil
 }
 
+// To subscribe to a channel
 func (r *Redis) Subscribe(channelName string, client *Client) (string, error) {
 	_, exists := r.ChannelMap[channelName]
 	if !exists {
@@ -82,16 +83,19 @@ func (r *Redis) Subscribe(channelName string, client *Client) (string, error) {
 	return "Ok", nil
 }
 
+// Publish a message on channel
 func (r *Redis) Publish(channelName, msg string, client *Client) (string, error) {
 	subMap, exists := r.ChannelMap[channelName]
 	if !exists {
 		return "", fmt.Errorf("channel doesn't exists")
 	}
 	var wg sync.WaitGroup
+	// Sending msg to all the subscribers
 	for sub := range subMap {
 		if sub == client {
 			continue
 		}
+		// Spawning a sperate goroutine for each subscriber
 		wg.Add(1)
 		go func(client *Client) {
 			client.SendResponse(client.conn.LocalAddr().String() + "\n" + msg)
